@@ -5316,7 +5316,9 @@ vm_fault_t handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
 	/* If the fault handler drops the mmap_lock, vma may be freed */
 	struct mm_struct *mm = vma->vm_mm;
 	vm_fault_t ret;
+	unsigned int saved_flags;
 
+	saved_flags = memalloc_editpte_save();
 	__set_current_state(TASK_RUNNING);
 
 	ret = sanitize_fault_flags(vma, &flags);
@@ -5358,6 +5360,7 @@ vm_fault_t handle_mm_fault(struct vm_area_struct *vma, unsigned long address,
 			mem_cgroup_oom_synchronize(false);
 	}
 out:
+	memalloc_editpte_restore(saved_flags);
 	mm_account_fault(mm, regs, address, flags, ret);
 
 	return ret;

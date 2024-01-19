@@ -2966,6 +2966,7 @@ static void kcompactd_do_work(pg_data_t *pgdat)
 	};
 	enum compact_result ret;
 
+
 	trace_mm_compaction_kcompactd_wake(pgdat->node_id, cc.order,
 							cc.highest_zoneidx);
 	count_compact_event(KCOMPACTD_WAKE);
@@ -3062,6 +3063,7 @@ static int kcompactd(void *p)
 	struct task_struct *tsk = current;
 	long default_timeout = msecs_to_jiffies(HPAGE_FRAG_CHECK_INTERVAL_MSEC);
 	long timeout = default_timeout;
+	unsigned int saved_flags;
 
 	const struct cpumask *cpumask = cpumask_of_node(pgdat->node_id);
 
@@ -3088,7 +3090,9 @@ static int kcompactd(void *p)
 			!pgdat->proactive_compact_trigger) {
 
 			psi_memstall_enter(&pflags);
+			saved_flags = memalloc_editpte_save();
 			kcompactd_do_work(pgdat);
+			memalloc_editpte_restore(saved_flags);
 			psi_memstall_leave(&pflags);
 			/*
 			 * Reset the timeout value. The defer timeout from

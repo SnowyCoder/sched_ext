@@ -380,6 +380,21 @@ static inline void memalloc_noreclaim_restore(unsigned int flags)
 	current->flags = (current->flags & ~PF_MEMALLOC) | flags;
 }
 
+/**
+ * Enables the flag signaling the process is editing page table entries
+ *
+ * Currently we use PF_MEMALLOC but it's not guaranteed, it can also change to a separate flag.
+ */
+static inline unsigned int memalloc_editpte_save(void)
+{
+	return memalloc_noreclaim_save();
+}
+
+static inline void memalloc_editpte_restore(unsigned int flags)
+{
+	memalloc_noreclaim_restore(flags);
+}
+
 static inline unsigned int memalloc_pin_save(void)
 {
 	unsigned int flags = current->flags & PF_MEMALLOC_PIN;

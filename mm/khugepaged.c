@@ -1094,6 +1094,7 @@ static int collapse_huge_page(struct mm_struct *mm, unsigned long address,
 	int result = SCAN_FAIL;
 	struct vm_area_struct *vma;
 	struct mmu_notifier_range range;
+	unsigned int saved_flags;
 
 	VM_BUG_ON(address & ~HPAGE_PMD_MASK);
 
@@ -1128,8 +1129,10 @@ static int collapse_huge_page(struct mm_struct *mm, unsigned long address,
 		 * released when it fails. So we jump out_nolock directly in
 		 * that case.  Continuing to collapse causes inconsistency.
 		 */
+		saved_flags = memalloc_editpte_save();
 		result = __collapse_huge_page_swapin(mm, vma, address, pmd,
 						     referenced);
+		memalloc_editpte_restore(saved_flags);
 		if (result != SCAN_SUCCEED)
 			goto out_nolock;
 	}
@@ -1253,6 +1256,7 @@ static int hpage_collapse_scan_pmd(struct mm_struct *mm,
 	struct page *page = NULL;
 	struct folio *folio = NULL;
 	unsigned long _address;
+	unsigned int saved_flags;
 	spinlock_t *ptl;
 	int node = NUMA_NO_NODE, unmapped = 0;
 	bool writable = false;
@@ -1401,8 +1405,10 @@ static int hpage_collapse_scan_pmd(struct mm_struct *mm,
 out_unmap:
 	pte_unmap_unlock(pte, ptl);
 	if (result == SCAN_SUCCEED) {
+		saved_flags = memalloc_editpte_save();
 		result = collapse_huge_page(mm, address, referenced,
 					    unmapped, cc);
+		memalloc_editpte_restore(saved_flags);
 		/* collapse_huge_page will return with the mmap_lock released */
 		*mmap_locked = false;
 	}
