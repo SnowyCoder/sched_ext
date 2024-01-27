@@ -6783,6 +6783,36 @@ static ssize_t memory_max_write(struct kernfs_open_file *of,
 	return nbytes;
 }
 
+static int memory_oom_show(struct seq_file *m, void *v)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_seq(m);
+
+	seq_printf(m, "%d\n", READ_ONCE(memcg->oom_kill_disable));
+
+	return 0;
+}
+
+static ssize_t memory_oom_write(struct kernfs_open_file *of,
+				char *buf, size_t nbytes, loff_t off)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_css(of_css(of));
+	int ret, oom_kill_disable;
+
+	buf = strstrip(buf);
+	if (!buf)
+		return -EINVAL;
+
+	ret = kstrtoint(buf, 0, &oom_kill_disable);
+	if (ret)
+		return ret;
+	if (oom_kill_disable != 0 && oom_kill_disable != 1)
+		return -EINVAL;
+
+	WRITE_ONCE(memcg->oom_kill_disable, oom_kill_disable);
+
+	return nbytes;
+}
+
 static void __memory_events_show(struct seq_file *m, atomic_long_t *events)
 {
 	seq_printf(m, "low %lu\n", atomic_long_read(&events[MEMCG_LOW]));
@@ -6971,6 +7001,12 @@ static struct cftype memory_files[] = {
 		.flags = CFTYPE_NOT_ON_ROOT,
 		.seq_show = memory_max_show,
 		.write = memory_max_write,
+	},
+	{
+		.name = "oom_kill_disable",
+		.flags = CFTYPE_NOT_ON_ROOT,
+		.seq_show = memory_oom_show,
+		.write = memory_oom_write,
 	},
 	{
 		.name = "events",

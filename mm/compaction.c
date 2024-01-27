@@ -12,6 +12,7 @@
 #include <linux/swap.h>
 #include <linux/migrate.h>
 #include <linux/compaction.h>
+#include <linux/memcontrol.h>
 #include <linux/mm_inline.h>
 #include <linux/sched/signal.h>
 #include <linux/backing-dev.h>
@@ -816,6 +817,21 @@ static bool too_many_isolated(struct compact_control *cc)
 	return too_many;
 }
 
+#ifdef CONFIG_MEMCG
+static bool skip_oom_flag(struct folio *folio)
+{
+	struct mem_cgroup *memcg;
+
+	memcg = folio_memcg(folio);
+	return !!(memcg && memcg->oom_kill_disable);
+}
+#else
+static bool skip_oom_flag(struct folio *folio)
+{
+	return false;
+}
+#endif
+
 /**
  * isolate_migratepages_block() - isolate all migrate-able pages within
  *				  a single pageblock
@@ -1057,6 +1073,10 @@ isolate_migratepages_block(struct compact_control *cc, unsigned long low_pfn,
 		 */
 		folio = folio_get_nontail_page(page);
 		if (unlikely(!folio))
+			goto isolate_fail;
+
+		/* Skip if oom killer is disabled (for no reason) */
+		if (skip_oom_flag(folio))
 			goto isolate_fail;
 
 		/*
