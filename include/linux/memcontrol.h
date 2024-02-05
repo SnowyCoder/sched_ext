@@ -238,6 +238,8 @@ struct mem_cgroup {
 	int	swappiness;
 	/* OOM-Killer disable */
 	int		oom_kill_disable;
+	/* kcompactd disable */
+	int compact_disable;
 
 	/* memory.events and memory.events.local */
 	struct cgroup_file events_file;

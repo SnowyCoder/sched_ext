@@ -818,15 +818,15 @@ static bool too_many_isolated(struct compact_control *cc)
 }
 
 #ifdef CONFIG_MEMCG
-static bool skip_oom_flag(struct folio *folio)
+static bool skip_compact_flag(struct folio *folio)
 {
 	struct mem_cgroup *memcg;
 
 	memcg = folio_memcg(folio);
-	return !!(memcg && memcg->oom_kill_disable);
+	return !!(memcg && memcg->compact_disable);
 }
 #else
-static bool skip_oom_flag(struct folio *folio)
+static bool skip_compact_flag(struct folio *folio)
 {
 	return false;
 }
@@ -1075,9 +1075,11 @@ isolate_migratepages_block(struct compact_control *cc, unsigned long low_pfn,
 		if (unlikely(!folio))
 			goto isolate_fail;
 
-		/* Skip if oom killer is disabled (for no reason) */
-		if (skip_oom_flag(folio))
-			goto isolate_fail;
+		/* Skip if compact_disable flag is set since some
+		 * processes don't want to have any page faults.
+		 */
+		if (skip_compact_flag(folio))
+			goto isolate_fail_put;
 
 		/*
 		 * Migration will fail if an anonymous page is pinned in memory,

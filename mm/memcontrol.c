@@ -5523,6 +5523,7 @@ mem_cgroup_css_alloc(struct cgroup_subsys_state *parent_css)
 	if (parent) {
 		WRITE_ONCE(memcg->swappiness, mem_cgroup_swappiness(parent));
 		WRITE_ONCE(memcg->oom_kill_disable, READ_ONCE(parent->oom_kill_disable));
+		WRITE_ONCE(memcg->compact_disable, READ_ONCE(parent->compact_disable));
 
 		page_counter_init(&memcg->memory, &parent->memory);
 		page_counter_init(&memcg->swap, &parent->swap);
@@ -6783,32 +6784,68 @@ static ssize_t memory_max_write(struct kernfs_open_file *of,
 	return nbytes;
 }
 
-static int memory_oom_show(struct seq_file *m, void *v)
+static int mem_cgroup_debug_print_pages(pmd_t *pmd,
+					unsigned long addr, unsigned long end,
+					struct mm_walk *walk)
 {
-	struct mem_cgroup *memcg = mem_cgroup_from_seq(m);
+	struct folio *folio;
+	struct mem_cgroup *memcg;
 
-	seq_printf(m, "%d\n", READ_ONCE(memcg->oom_kill_disable));
+	folio = page_folio(pmd_page(*pmd));
+	memcg = folio_memcg(folio);
+	pr_info("PAGE %lx ", addr);
+	pr_cont_kernfs_path(memcg->css.cgroup->kn);
+	pr_cont(" comp_dis=%d map_count=%d,%d,%d rc=%d large=%d\n", memcg->compact_disable, folio_mapcount(folio), folio_entire_mapcount(folio), folio_total_mapcount(folio), folio_ref_count(folio), folio_test_large(folio));
 
 	return 0;
 }
 
-static ssize_t memory_oom_write(struct kernfs_open_file *of,
+static const struct mm_walk_ops debug_print_walk_ops = {
+	.pmd_entry	= mem_cgroup_debug_print_pages,
+	.walk_lock	= PGWALK_RDLOCK,
+};
+
+static int memory_compact_disable_show(struct seq_file *m, void *v)
+{
+	struct mem_cgroup *memcg = mem_cgroup_from_seq(m);
+
+	seq_printf(m, "%d\n", READ_ONCE(memcg->compact_disable));
+
+	struct css_task_iter iter;
+	struct task_struct *task;
+	struct mm_struct *mm;
+	printk("PRINTING ALL!");
+	css_task_iter_start(&memcg->css, 0, &iter);
+
+	while (task = css_task_iter_next(&iter)) {
+		mm = task->mm;
+		mmap_read_lock(mm);
+		walk_page_range(mm, 0, ULONG_MAX, &debug_print_walk_ops, (void *)m);
+		mmap_read_unlock(mm);
+	}
+	css_task_iter_end(&iter);
+
+
+	return 0;
+}
+
+static ssize_t memory_compact_disable_write(struct kernfs_open_file *of,
 				char *buf, size_t nbytes, loff_t off)
 {
 	struct mem_cgroup *memcg = mem_cgroup_from_css(of_css(of));
-	int ret, oom_kill_disable;
+	int ret, compact_disable;
 
 	buf = strstrip(buf);
 	if (!buf)
 		return -EINVAL;
 
-	ret = kstrtoint(buf, 0, &oom_kill_disable);
+	ret = kstrtoint(buf, 0, &compact_disable);
 	if (ret)
 		return ret;
-	if (oom_kill_disable != 0 && oom_kill_disable != 1)
+	if (compact_disable != 0 && compact_disable != 1)
 		return -EINVAL;
 
-	WRITE_ONCE(memcg->oom_kill_disable, oom_kill_disable);
+	WRITE_ONCE(memcg->compact_disable, compact_disable);
 
 	return nbytes;
 }
@@ -7003,10 +7040,10 @@ static struct cftype memory_files[] = {
 		.write = memory_max_write,
 	},
 	{
-		.name = "oom_kill_disable",
+		.name = "compact_disable",
 		.flags = CFTYPE_NOT_ON_ROOT,
-		.seq_show = memory_oom_show,
-		.write = memory_oom_write,
+		.seq_show = memory_compact_disable_show,
+		.write = memory_compact_disable_write,
 	},
 	{
 		.name = "events",
