@@ -13,4 +13,8 @@ BPF_STRUCT_OPS_TYPE(tcp_congestion_ops)
 #include <linux/sched/ext.h>
 BPF_STRUCT_OPS_TYPE(sched_ext_ops)
 #endif
+#ifdef CONFIG_UIO_EXT
+#include <linux/uio_ext.h>
+BPF_STRUCT_OPS_TYPE(uio_ext_ops)
+#endif
 #endif

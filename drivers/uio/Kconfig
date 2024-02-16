@@ -13,6 +13,16 @@ menuconfig UIO
 
 if UIO
 
+config UIO_EXT
+	bool "UIO BPF driver"
+	depends on BPF_SYSCALL && BPF_JIT && UIO=y
+
+	help
+	  Provides Userspace the possibility to register BPF programs
+	  to manage I/O devices using the UIO interface.
+
+	  If you don't know what to do here, say N.
+
 config UIO_CIF
 	tristate "generic Hilscher CIF Card driver"
 	depends on PCI
